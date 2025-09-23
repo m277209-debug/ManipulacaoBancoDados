@@ -1,0 +1,141 @@
+---
+title: "Desafio 04"
+format: html
+editor: visual
+
+ALUNOS: Isabela Santos Marciano - RA: 185325
+        Matheus Pierri de Oliveira - RA: 277209
+        Wan Tai Cheuk - RA: 277240
+---
+
+```{r}
+#carregar pacotes
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(leaflet)
+library(leaflet.extras)
+library(readr) 
+library(htmlwidgets)
+library(geosphere)
+library(htmltools)
+library(knitr)
+library(leafgl)
+library(DT)
+
+# Definir caminho do arquivo (ajuste conforme necessário)
+arquivo <- file.path("\\\\smb\\ra277209\\Documentos\\flights.csv.zip")
+# Solicitar código da aeronave ao usuário
+tail_number <- readline(prompt = "Digite o código da aeronave: ") #escolher o avião
+
+# Função principal para análise da aeronave (filtragem de dados)    
+analisa_aeronave <- function(tail_number, arquivo){ 
+
+  filtrados <- tibble()
+  processar_chunk <- function(chunk, pos) {
+    chunk_filtrado <- chunk %>% filter(TAIL_NUMBER == tail_number)
+    filtrados <<- bind_rows(filtrados, chunk_filtrado)
+  }
+  
+# Ler arquivo CSV em chunks para melhor performance com grandes volumes de dados
+ flights <- read_csv_chunked(
+    file = unz(arquivo, "flights.csv"),
+    callback = DataFrameCallback$new(processar_chunk),
+    chunk_size = 100000
+  )
+ 
+# Ler informações das companhias aéreas
+  airlines <- read_csv(unz(arquivo, "airlines.csv"))
+# Ler informações dos aeroportos (incluindo coordenadas)
+  airports <- read_csv(unz(arquivo, "airports.csv"))
+  
+# Preparar tabela tidy
+  tabela_trajetos <- filtrados %>%
+    mutate(
+      # garantir que SCHEDULED_DEPARTURE é numérico
+      SCHEDULED_DEPARTURE = as.integer(SCHEDULED_DEPARTURE),
+      
+      # extrair hora e minuto
+      HOUR   = SCHEDULED_DEPARTURE %/% 100,
+      MINUTE = SCHEDULED_DEPARTURE %% 100,
+      
+      # criar datetime
+      DATA_HORA = make_datetime(YEAR, MONTH, DAY, HOUR, MINUTE)
+  ) %>%
+  arrange(DATA_HORA)
+  
+# Adicionando as cordenadas das aeronaves na tabela_trajetos
+  
+  tabela_trajetos <- tabela_trajetos %>%
+    left_join(airports %>% select(IATA_CODE, LATITUDE, LONGITUDE),
+              by = c("ORIGIN_AIRPORT" = "IATA_CODE")) %>%
+    rename(LAT_ORIG = LATITUDE, LON_ORIG = LONGITUDE) %>%  
+    left_join(airports %>% select(IATA_CODE, LATITUDE, LONGITUDE),
+              by = c("DESTINATION_AIRPORT" = "IATA_CODE")) %>%
+    rename(LAT_DEST = LATITUDE, LON_DEST = LONGITUDE)
+ 
+# Cálculo das estatísticas 
+  tabela_trajetos <- tabela_trajetos %>%
+    rowwise() %>%
+    mutate(
+      DISTANCIA_KM = distHaversine(c(LON_ORIG, LAT_ORIG), 
+                                   c(LON_DEST, LAT_DEST)) / 1000,
+      TEMPO_H = SCHEDULED_TIME / 60,
+      VEL_MEDIA = ifelse(!is.na(TEMPO_H) & TEMPO_H > 0, DISTANCIA_KM / TEMPO_H, NA)
+    ) %>%
+    ungroup()
+  
+# Filtrar os 500 primeiros para o mapa rodar mais liso
+  tabela_trajetos <- head(tabela_trajetos, 500)
+  
+# Criação do mapa interativo
+  mapa <- leaflet(tabela_trajetos) %>%
+    addProviderTiles("CartoDB.Positron") %>%
+    addPolylines(
+        lng = ~c(LON_ORIG, LON_DEST),
+        lat = ~c(LAT_ORIG, LAT_DEST),
+        color = "blue",
+        weight = ~scales::rescale(VEL_MEDIA, to = c(0.5, 2), na.rm = TRUE),
+        smoothFactor = 0.5,
+        popup = ~paste0("<b>Origem:</b> ", ORIGIN_AIRPORT,
+                      "<br><b>Destino:</b> ", DESTINATION_AIRPORT,
+                      "<br><b>Data:</b> ", DATA_HORA,
+                      "<br><b>Distância:</b> ", round(DISTANCIA_KM, 1), " km",
+                      "<br><b>Vel. média:</b> ", round(VEL_MEDIA, 1), " km/h")
+    ) %>%
+    addCircleMarkers(~LON_ORIG, ~LAT_ORIG, color = "green", radius = 3,
+                     popup = ~ORIGIN_AIRPORT) %>%
+    addCircleMarkers(~LON_DEST, ~LAT_DEST, color = "red", radius = 3,
+                     popup = ~DESTINATION_AIRPORT)
+  
+    return(list(tabela = tabela_trajetos, mapa = mapa))
+}
+
+# Execução da análise
+ # Chamar função principal com os parâmetros especificados
+resultado <- analisa_aeronave(tail_number, arquivo)
+ # Visualizar tabela resultante
+View(resultado$tabela)
+
+# Relatório html
+ # Criar tabela HTML interativa com scroll
+tabela_html <- datatable(
+  resultado$tabela,
+  options = list(
+    scrollY = "400px",  
+    pageLength = 20,     
+    scrollX = TRUE       
+  ),
+  rownames = FALSE
+)
+  # Criar relatório HTML combinando tabela e mapa
+relatorio <- tagList(
+  h2(paste("Relatório da Aeronave:", tail_number)),
+  h3("Tabela de Trajetos"),
+  tabela_html, #fazer com scroll
+  h3("Mapa dos Voos"),
+  resultado$mapa
+)
+ # Salvar relatório em arquivo HTML
+save_html(relatorio, "relatorio_aeronave.html")
+```

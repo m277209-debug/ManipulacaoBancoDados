@@ -1,0 +1,30 @@
+---
+title: "Desafio 01"
+author: "Matheus Pierri de Oliveira"
+format: html
+editor: visual
+---
+
+```{r}
+ini <- Sys.time()
+dados <- read.csv(unz('\\\\smb\\ra277209\\Downloads\\flights.csv.zip', "flights.csv"))
+fim <- Sys.time()
+fim - ini
+```
+
+```{r}
+library(readr)
+ini <- Sys.time()
+dados <- read_csv('\\\\smb\\ra277209\\Downloads\\flights.csv.zip')
+fim <- Sys.time()
+fim - ini
+```
+
+```{python}
+import time
+import pandas as pd
+ini = time.time()
+dados = pd.read_csv("//smb/ra277209/Downloads/flights.csv.zip", compression="zip", header=0, sep=",", low_memory=False)
+fim = time.time()
+fim - ini
+```
