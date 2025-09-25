@@ -1,0 +1,61 @@
+---
+title: "desafio03"
+format: pdf
+editor: visual
+---
+
+PACOTES NECESSÁRIOS:
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+install.packages("arrow")
+install.packages("jsonlite")
+install.packages("tsibble")
+install.packages("dplyr")
+
+library(arrow)
+library(jsonlite)
+library(tsibble)
+library(dplyr)
+```
+
+ARQUIVO PARQUET:
+
+```{r}
+# Baixando o arquivo
+download.file(
+  "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2023-01.parquet",
+  destfile = "yellow_tripdata_2023-01.parquet",
+  mode = "wb"
+)
+
+# Lendo o parquet e convertendo em data frame
+df_taxi_raw <- read_parquet("yellow_tripdata_2023-01.parquet")
+df_taxi <- as.data.frame(df_taxi_raw)
+
+head(df_taxi)
+class(df_taxi) #conferindo se é data frame
+```
+
+ARQUIVO JSON:
+
+```{r}
+# Baixando o arquivo
+download.file(
+  "https://jsonplaceholder.typicode.com/users",
+  destfile = "usuarios.json"
+)
+
+# Lendo o JSON salvo localmente e convertendo em data frame
+df_users_raw <- fromJSON("usuarios.json")
+df_users <- as.data.frame(df_users_raw)
+
+head(df_users)
+class(df_users) #conferindo se é data frame
+```
+
+EXPLICAÇÃO:
+
+O formato **Parquet** é orientado a colunas e bastante eficiente para armazenar e processar grandes volumes de dados, enquanto o **JSON** (JavaScript Object Notation) é leve, baseado em texto e amplamente usado para troca de informações entre sistemas e APIs. No R, ambos podem ser tratados de forma simples com a ajuda dos pacotes adequados. \
+Primeiro, utilizamos `download.file()` para baixar os arquivos de interesse, seja um Parquet ou um JSON, e salvá-los localmente. \
+Em seguida, o Parquet pode ser lido com `read_parquet()`, retornando inicialmente um objeto do pacote **arrow**, que pode ser convertido em data frame com `as.data.frame()` para facilitar a análise; já no caso do JSON, empregamos `fromJSON()`, que interpreta a estrutura em chave–valor e a organiza em tabela, também podendo ser convertida em data frame. Assim, com poucos comandos conseguimos transformar dados em formatos diferentes em estruturas tabulares usuais do R, permitindo que sejam manipulados com funções de pacotes como **dplyr** ou **tsibble**..
