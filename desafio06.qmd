@@ -1,0 +1,260 @@
+---
+title: "desafio06"
+format: html
+editor: visual
+---
+
+Parte 1: laboratório 6
+
+```{r}
+# 1. INSTALAÇÃO E CARREGAMENTO DOS PACOTES
+#-----------------------------------------------------------------------
+# Instalar e carregar pacotes necesários
+#install.packages("RSQLite")
+library(RSQLite)
+
+#install.packages("dplyr")
+library(dplyr)
+
+
+#-----------------------------------------------------------------------
+# 2. CONFIGURAR CAMINHO E CONEXÃO COM O BANCO DE DADOS
+#-----------------------------------------------------------------------
+
+fname <- "C:\\Users\\User\\Downloads\\disco.db"
+
+# Conectar-se ao banco de dados SQLite
+# O objeto 'conn' armazenará a conexão
+conn <- dbConnect(RSQLite::SQLite(), fname)
+
+cat("Conexão com o banco de dados estabelecida com sucesso.\n\n")
+
+
+#-----------------------------------------------------------------------
+# 3. EXPLORAÇÃO DO BANCO DE DADOS
+#-----------------------------------------------------------------------
+# Mostrar todas as tabelas que existem no banco de dados
+cat("--- Tabelas disponíveis no banco de dados ---\n")
+print(dbListTables(conn))
+cat("\n")
+
+#  Exibe todas as colunas presentes na tabela 'customers'
+cat("--- Colunas na tabela 'customers' ---\n")
+print(dbListFields(conn, "customers"))
+cat("\n")
+
+
+#-----------------------------------------------------------------------
+# 4. EXECUÇÃO DAS CONSULTAS SQL
+#-----------------------------------------------------------------------
+# Pergunta 1: Quantos clientes estão atualmente cadastrados?
+cat("--- Total de clientes cadastrados ---\n")
+query1 <- "SELECT COUNT(CustomerId) AS total_clientes FROM customers;"
+total_clientes <- dbGetQuery(conn, query1)
+print(total_clientes)
+cat("\n")
+
+# Pergunta 2: Número de países diferentes onde os clientes moram.
+cat("--- Número de países distintos dos clientes ---\n")
+query2 <- "SELECT COUNT(DISTINCT Country) AS total_paises FROM customers;"
+total_paises <- dbGetQuery(conn, query2)
+print(total_paises)
+cat("\n")
+
+# Pergunta 3: Quantos clientes existem por país?
+cat("--- Contagem de clientes por país (ordem decrescente) ---\n")
+query3 <- "
+  SELECT Country, COUNT(CustomerId) AS contagem
+  FROM customers
+  GROUP BY Country
+  ORDER BY contagem DESC;
+"
+clientes_por_pais <- dbGetQuery(conn, query3)
+print(clientes_por_pais)
+cat("\n")
+
+# Pergunta 4: Quais são os 5 países com mais clientes registrados?
+cat("--- TOP 5 países com mais clientes ---\n")
+query4 <- "
+  SELECT Country, COUNT(CustomerId) AS contagem
+  FROM customers
+  GROUP BY Country
+  ORDER BY contagem DESC
+  LIMIT 5;
+"
+top_5_paises <- dbGetQuery(conn, query4)
+print(top_5_paises)
+cat("\n")
+
+# Pergunta 5: Quais são os países registrados que possuem apenas 6 letras no nome?
+cat("--- Países com exatamente 6 letras no nome ---\n")
+query5 <- "SELECT DISTINCT Country FROM customers WHERE LENGTH(Country) = 6;"
+paises_6_letras <- dbGetQuery(conn, query5)
+print(paises_6_letras)
+cat("\n")
+
+# Pergunta 6: Quais foram as músicas compradas por clientes brasileiros?
+cat("--- Músicas compradas por clientes do Brasil ---\n")
+query6 <- "
+  SELECT t.Name AS Musica, c.FirstName || ' ' || c.LastName AS Cliente
+  FROM customers c
+  JOIN invoices i ON c.CustomerId = i.CustomerId
+  JOIN invoice_items ii ON i.InvoiceId = ii.InvoiceId
+  JOIN tracks t ON ii.TrackId = t.TrackId
+  WHERE c.Country = 'Brazil'
+  ORDER BY Cliente, Musica;
+"
+musicas_brasil <- dbGetQuery(conn, query6)
+# Usar head() para mostrar apenas parte da lista, caso seja muito extensa
+print(head(musicas_brasil, 15)) 
+cat("... e mais", nrow(musicas_brasil) - 15, "registros.\n\n")
+
+
+#-----------------------------------------------------------------------
+# 5. DESCONEXÃO DO BANCO DE DADOS
+#-----------------------------------------------------------------------
+
+dbDisconnect(conn)
+
+cat("Conexão com o banco de dados encerrada.\n")
+```
+
+Parte 2: álbum e artista mais tocado por pais.
+
+```{r}
+#-----------------------------------------------------------------------
+# Bloco de Código - Análise Adicional (P2) - VERSÃO FINAL
+#-----------------------------------------------------------------------
+
+# 1. CARREGAR PACOTES NECESSÁRIOS
+library(RSQLite)
+library(dplyr)
+library(knitr) #Usado para gerar tabelas organizadas
+
+
+#-----------------------------------------------------------------------
+# 2. CONEXÃO COM O BANCO (USANDO CAMINHO RELATIVO)
+
+#-----------------------------------------------------------------------
+db_file <- "disco.db"
+conn <- dbConnect(RSQLite::SQLite(), db_file)
+
+cat("--- Conexão estabelecida com sucesso ---\n\n")
+
+#-----------------------------------------------------------------------
+# 3. CONSULTA: ÁLBUM MAIS VENDIDO POR PAÍS
+#-----------------------------------------------------------------------
+cat("--- 1. Qual o álbum mais vendido por país? ---\n")
+
+query_album_por_pais <- "
+WITH VendasPorAlbum AS (
+  SELECT
+    c.Country,
+    al.Title AS Album,
+    COUNT(ii.InvoiceLineId) AS TotalVendas
+  FROM customers c
+  JOIN invoices i ON c.CustomerId = i.CustomerId
+  JOIN invoice_items ii ON i.InvoiceId = ii.InvoiceId
+  JOIN tracks t ON ii.TrackId = t.TrackId
+  JOIN albums al ON t.AlbumId = al.AlbumId
+  GROUP BY c.Country, al.Title
+),
+RankingVendas AS (
+  SELECT
+    Country,
+    Album,
+    TotalVendas,
+    RANK() OVER (PARTITION BY Country ORDER BY TotalVendas DESC) as RankNum
+  FROM VendasPorAlbum
+)
+SELECT 
+  Country,
+  Album,
+  TotalVendas
+FROM RankingVendas
+WHERE RankNum = 1
+/* ALTERAÇÃO 1: Ordenando pelo total de vendas para colocar o maior no topo */
+ORDER BY TotalVendas DESC;
+"
+album_mais_tocado <- dbGetQuery(conn, query_album_por_pais)
+
+# ALTERAÇÃO 2: Inclui um resumo destacando o campeão geral
+if (nrow(album_mais_tocado) > 0) {
+  top_album <- album_mais_tocado[1, ] # Pega a primeira linha (o campeão)
+  cat(paste0(
+    "O álbum campeão geral (com mais vendas em um único país) é '",
+    top_album$Album,
+    "', vendido no(a) ",
+    top_album$Country,
+    " com ",
+    top_album$TotalVendas,
+    " faixas.\n\n"
+  ))
+}
+
+#  A função kable() gera uma tabela formatada para o relatório final (PDF/HTML)
+kable(album_mais_tocado)
+cat("\n\n")
+
+#-----------------------------------------------------------------------
+# 4. CONSULTA: ARTISTA MAIS VENDIDO POR PAÍS
+#-----------------------------------------------------------------------
+cat("--- 2. Qual o artista mais vendido por país? ---\n")
+query_artista_por_pais <- "
+WITH VendasPorArtista AS (
+  SELECT
+    c.Country,
+    ar.Name AS Artista,
+    COUNT(ii.InvoiceLineId) AS TotalVendas
+  FROM customers c
+  JOIN invoices i ON c.CustomerId = i.CustomerId
+  JOIN invoice_items ii ON i.InvoiceId = ii.InvoiceId
+  JOIN tracks t ON ii.TrackId = t.TrackId
+  JOIN albums al ON t.AlbumId = al.AlbumId
+  JOIN artists ar ON al.ArtistId = ar.ArtistId
+  GROUP BY c.Country, ar.Name
+),
+RankingVendasArtistas AS (
+  SELECT
+    Country,
+    Artista,
+    TotalVendas,
+    RANK() OVER (PARTITION BY Country ORDER BY TotalVendas DESC) as RankNum
+  FROM VendasPorArtista
+)
+SELECT 
+  Country,
+  Artista,
+  TotalVendas
+FROM RankingVendasArtistas
+WHERE RankNum = 1
+/* ALTERAÇÃO 1: Ordenando pelo total de vendas para colocar o maior no topo */
+ORDER BY TotalVendas DESC;
+"
+
+artista_mais_tocado <- dbGetQuery(conn, query_artista_por_pais)
+
+# ALTERAÇÃO 2: Inclui uma frase resumindo o resultado principal
+if (nrow(artista_mais_tocado) > 0) {
+  top_artista <- artista_mais_tocado[1, ] # Pega a primeira linha (o campeão)
+  cat(paste0(
+    "O artista campeão geral (com mais vendas em um único país) é '",
+    top_artista$Artista,
+    "', que vendeu ",
+    top_artista$TotalVendas,
+    " faixas no(a) ",
+    top_artista$Country,
+    ".\n\n"
+  ))
+}
+
+# Mostrando os resultados em formato tabular organizado
+kable(artista_mais_tocado)
+cat("\n\n")
+
+#-----------------------------------------------------------------------
+# 5. DESCONEXÃO DO BANCO DE DADOS
+#-----------------------------------------------------------------------
+dbDisconnect(conn)
+cat("--- Conexão com o banco de dados encerrada ---\n")
+```
