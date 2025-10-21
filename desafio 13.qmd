@@ -1,0 +1,100 @@
+---
+title: "Desafio 13"
+format: html
+editor: visual
+---
+
+## 
+
+```{r}
+#| eval: false
+# Carregar pacotes necessários
+library(RSQLite)
+library(dplyr)
+library(readr)
+
+# Criar conexão com o banco de dados SQLite
+con <- dbConnect(SQLite(), "movies.sqlite3")
+
+# Ler os arquivos comprimidos
+basics <- read_tsv("title.basics0.tsv.gz", na = "\\N")
+ratings <- read_tsv("title.ratings.tsv.gz", na = "\\N")
+principals <- read_tsv("title.principals0.tsv.gz", na = "\\N")
+
+
+
+```
+
+```{r}
+#| eval: false
+#1) Criar tabelas no banco SQLite
+dbWriteTable(con, "basics", basics, overwrite = TRUE)
+dbWriteTable(con, "ratings", ratings, overwrite = TRUE)
+dbWriteTable(con, "principals", principals, overwrite = TRUE)
+
+```
+
+```{r}
+# 2) 5 filmes com maiores notas (averageRating), desempate por número de votos (numVotes)
+
+query1 <- "
+SELECT b.primaryTitle, r.averageRating, r.numVotes
+FROM ratings r
+JOIN basics b ON r.tconst = b.tconst
+WHERE b.titleType = 'movie'
+ORDER BY r.averageRating DESC, r.numVotes DESC
+LIMIT 5;
+"
+
+top5_filmes <- dbGetQuery(con, query1)
+top5_filmes
+
+```
+
+\
+
+```{r}
+#3) Gênero mais frequente entre filmes com nota > 8
+query2 <- "
+SELECT TRIM(SUBSTR(g, 1, INSTR(g, ',') - 1)) AS genre, COUNT(*) AS freq
+FROM (
+    SELECT b.genres AS g
+    FROM basics b
+    JOIN ratings r ON b.tconst = r.tconst
+    WHERE r.averageRating > 8 AND b.titleType = 'movie'
+)
+GROUP BY genre
+ORDER BY freq DESC
+LIMIT 1;
+"
+
+genero_mais_frequente <- dbGetQuery(con, query2)
+genero_mais_frequente
+
+
+```
+
+```{r}
+#4) 3 atores/atrizes que mais participaram de filmes com nota > 7.5
+query3 <- "
+SELECT p.nconst, COUNT(*) AS total_filmes
+FROM principals p
+JOIN ratings r ON p.tconst = r.tconst
+JOIN basics b ON b.tconst = r.tconst
+WHERE r.averageRating > 7.5
+  AND b.titleType = 'movie'
+  AND p.category IN ('actor', 'actress')
+GROUP BY p.nconst
+ORDER BY total_filmes DESC
+LIMIT 3;
+"
+
+atores_top3 <- dbGetQuery(con, query3)
+atores_top3
+
+```
+
+```{r}
+dbDisconnect(con)
+
+```
