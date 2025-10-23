@@ -1,0 +1,335 @@
+---
+title: "desafio10"
+format: html
+editor: visual
+---
+
+-   Introdução ao Polars
+
+```{python}
+#| label: instalar-pyarrow
+#| echo: true
+
+!pip install pyarrow
+```
+
+```{python}
+
+# O '!' no início executa o comando no shell do sistema
+print("Instalando a biblioteca polars...")
+!pip install polars
+
+print("Instalando a biblioteca fastexcel...")
+!pip install fastexcel
+
+print("Instalação concluída.")
+```
+
+```{python}
+# 2. Introdução ao Polars
+
+## Carregando a Biblioteca
+
+#Com as bibliotecas instaladas, o próximo passo é importá-las para o nosso script. Usamos o alias `pl` como uma convenção da comunidade para nos referirmos ao Polars de forma mais curta.
+
+#| label: importar-polars
+#| echo: true
+
+# Importa a biblioteca polars e a apelida de 'pl' para facilitar o uso
+import polars as pl
+
+# Imprime a versão para confirmar que a importação funcionou
+print(f"Polars importado com sucesso. Versão: {pl.__version__}")
+```
+
+```{python}
+
+#| label: ler-csv-aeroportos
+#| echo: true
+
+# Lê o arquivo "airports.csv" do mesmo diretório do script.
+# Esta é a forma mais segura de garantir que o arquivo seja encontrado.
+aeroportos = pl.read_csv(
+    "airports.csv",
+    columns=["IATA_CODE", "CITY", "STATE"]
+)
+
+# Mostra as 2 primeiras linhas do DataFrame criado
+print("As 2 primeiras linhas do DataFrame 'aeroportos':")
+aeroportos.head(2)
+```
+
+```{python}
+# ATENÇÃO: Para este código funcionar, coloque o arquivo "WDIEXCEL.xlsx"
+# na mesma pasta do seu script/notebook.
+
+# Lê uma planilha específica ("Country") de um arquivo Excel.
+# Seleciona apenas as colunas "Short Name" e "Region".
+wdi = pl.read_excel(
+    "WDIEXCEL.xlsx", 
+    sheet_name="Country",
+    columns=["Short Name", "Region"]
+)
+
+# Mostra as 2 primeiras linhas para verificar o carregamento.
+wdi.head(2)
+```
+
+```{python}
+# Cria um novo DataFrame do zero a partir de um dicionário.
+# As chaves do dicionário viram os nomes das colunas, e os valores viram os dados.
+# "None" é como representamos valores ausentes (nulos) em Python/Polars.
+df = pl.DataFrame({
+    "grupo": ["A", "A", "B", "B", "C"],
+    "valor1": [10, 15, 10, None, 25],
+    "valor2": [5, None, 20, 30, None]
+})
+
+# Exibe o conteúdo completo do DataFrame que acabamos de criar.
+df
+```
+
+```{python}
+# Seleciona e exibe apenas a coluna "valor1" do DataFrame.
+# O resultado é um objeto do tipo "Series".
+df["valor1"]
+```
+
+```{python}
+# Calcula a média da coluna "valor1".
+# O Polars ignora automaticamente os valores nulos (None) nesse cálculo.
+df["valor1"].mean()
+```
+
+```{python}
+# O método .select() é usado para executar uma ou mais expressões/operações.
+# Cada expressão na lista vira uma coluna no DataFrame de resultado.
+df.select([
+    # Expressão 1: Calcula a média da "valor1" e renomeia a coluna para "media_v1"
+    pl.col("valor1").mean().alias("media_v1"),
+    
+    # Expressão 2: Calcula a média da "valor2". 
+    # Como não usamos .alias(), o Polars dará um nome padrão à coluna.
+    pl.col("valor2").mean()
+])
+```
+
+```{python}
+# Este é um exemplo de "group by", uma operação muito comum em análise de dados.
+# A lógica é: agrupar, agregar e depois ordenar.
+df.group_by("grupo").agg([
+    # Dentro de .agg(), passamos uma lista de expressões para calcular em cada grupo.
+    
+    # 1. Para cada grupo, calcula a média da coluna "valor1".
+    pl.col("valor1").mean().alias("media_valor1"),
+    
+    # 2. Para cada grupo, encontra o valor mínimo da coluna "valor2".
+    pl.col("valor2").min().alias("min_valor2")
+    
+]).sort("grupo") # No final, ordena o DataFrame resultante pela coluna "grupo".
+```
+
+```{python}
+# Garanta que "flights.csv" está na mesma pasta antes de rodar.
+
+voos = pl.read_csv(
+    "flights.csv",  # Caminho correto e simples
+    columns=["AIRLINE", "ARRIVAL_DELAY", "DESTINATION_AIRPORT"],
+    
+    # Parâmetro corrigido para a versão nova do Polars
+    schema_overrides={
+        "AIRLINE": pl.Utf8,
+        "ARRIVAL_DELAY": pl.Int32,
+        "DESTINATION_AIRPORT": pl.Utf8
+    }
+)
+
+# Mostra o formato (linhas, colunas) do DataFrame.
+voos.shape
+```
+
+```{python}
+voos.head(3)
+```
+
+```{python}
+# Este é o código anterior, mas com o nome da coluna corrigido
+# para "atraso_medio", como o seu próximo comando espera.
+
+resultado = (
+    voos.drop_nulls(["AIRLINE", "DESTINATION_AIRPORT", "ARRIVAL_DELAY"])
+    .filter(
+        pl.col("AIRLINE").is_in(["AA", "DL"]) &
+        pl.col("DESTINATION_AIRPORT").is_in(["SEA", "MIA", "BWI"])
+    )
+    .group_by(["AIRLINE", "DESTINATION_AIRPORT"])
+    .agg([
+        # Expressão: Calcula a proporção de voos com atraso maior que 30 min.
+        # A única mudança está na linha abaixo, no .alias().
+        (pl.col("ARRIVAL_DELAY") > 30).mean().alias("atraso_medio")
+    ])
+)
+
+```
+
+```{python}
+resultado.sort("atraso_medio")
+```
+
+-   Dados Relacionais com Polars
+
+```{python}
+import polars as pl
+
+# Criando o primeiro DataFrame, a "tabela de clientes".
+# Ele servirá como a base para as nossas operações de junção (join).
+clientes = pl.DataFrame({
+    "cliente_id": [1, 2, 3, 4],
+    "nome": ["Ana", "Bruno", "Clara", "Daniel"]
+})
+
+# Exibe o DataFrame de clientes.
+print("Tabela de Clientes:")
+print(clientes)
+```
+
+```{python}
+# Criando o segundo DataFrame, a "tabela de pedidos".
+pedidos = pl.DataFrame({
+    "pedido_id": [101, 102, 103, 104, 105],
+    # A coluna "cliente_id" é a chave que vai conectar esta tabela
+    # com a tabela "clientes".
+    "cliente_id": [1, 2, 3, 1, 5], 
+    "valor": [100.50, 250.75, 75.00, 130.00, 79.00]
+})
+
+# Exibe o DataFrame de pedidos.
+# Note que o cliente_id=5 fez um pedido, mas não está na tabela de clientes.
+# E o cliente_id=4 (Daniel) não fez nenhum pedido.
+print("Tabela de Pedidos:")
+print(pedidos)
+```
+
+```{python}
+# .join() é o método para combinar dois DataFrames.
+res_ij = clientes.join(
+    pedidos, 
+    on="cliente_id", # A coluna usada para fazer a ligação
+    how="inner"      # O tipo de join
+)
+
+# O "inner" join retorna apenas as linhas onde o "cliente_id" existe
+# em AMBAS as tabelas (clientes E pedidos).
+# Por isso, Daniel (id 4) e o pedido do cliente 5 não aparecerão.
+print("Resultado do Inner Join:")
+print(res_ij)
+```
+
+```{python}
+# Realiza um "outer join".
+res_oj = clientes.join(
+    pedidos, 
+    on="cliente_id", 
+    how="outer"
+)
+
+# O "outer" join mantém TODAS as linhas de AMBAS as tabelas.
+# - Clientes sem pedidos (Daniel) aparecerão com dados do pedido nulos.
+# - Pedidos sem clientes cadastrados (cliente_id 5) aparecerão com dados
+#   do cliente nulos.
+print("Resultado do Outer Join:")
+print(res_oj)
+```
+
+```{python}
+# Para o "cross join", simplesmente removemos o parâmetro "on".
+# O Polars então entende que deve combinar todas as linhas das duas tabelas.
+res_cj = clientes.join(
+    pedidos, 
+    how="cross"
+)
+
+print("Resultado do Cross Join (corrigido):")
+print(res_cj)
+```
+
+```{python}
+print(clientes)
+```
+
+```{python}
+print(pedidos)
+```
+
+```{python}
+res = res_ij.group_by(["nome", "cliente_id"]).agg(pl.col("valor").mean())
+print(res)
+```
+
+```{python}
+print(clientes)
+```
+
+```{python}
+print(pedidos)
+```
+
+```{python}
+res = (res_oj.with_columns(pl.col("valor") > 100)
+       .group_by("nome")
+       .agg(pl.col("valor").sum()))
+print(res)
+```
+
+```{python}
+# Criando a primeira tabela para o próximo exemplo.
+vendas = pl.DataFrame({
+    "id_venda": [1, 2, 3],
+    "id_cl": [1, 2, 1],  # <-- Nome da coluna do cliente
+    "id_prod": [101, 102, 103],
+    "qtde": [2, 1, 1]
+})
+
+print("Tabela 'vendas':")
+print(vendas)
+
+# Criando a segunda tabela.
+detalhes_pedidos = pl.DataFrame({
+    "id_ped": [201, 202, 203],
+    "cl_id": [1, 2, 1],  # <-- Mesmo dado, nome de coluna diferente
+    "id_prod": [101, 102, 104],
+    "valor": [50.00, 75.00, 100.00]
+})
+
+print("\nTabela 'detalhes_pedidos':")
+print(detalhes_pedidos)
+```
+
+```{python}
+print(vendas)
+```
+
+```{python}
+print(detalhes_pedidos)
+```
+
+```{python}
+final = vendas.join(detalhes_pedidos,
+                    left_on = ["id_cl", "id_prod"],
+                    right_on = ["cl_id", "id_prod"],
+                    how = "inner")
+print(final)
+```
+
+```{python}
+# ESTE É O BLOCO FINAL DO SEU ARQUIVO (VERSÃO SIMPLIFICADA E SEGURA)
+
+from datetime import datetime
+
+# Pega a data e hora atuais do sistema e formata.
+# Não depende de nenhum pacote extra.
+data_hora_compilacao = datetime.now().strftime("%d de %B de %Y, às %H:%M:%S")
+
+# Imprime a mensagem final.
+print(f"Documento compilado com sucesso em: {data_hora_compilacao}")
+```

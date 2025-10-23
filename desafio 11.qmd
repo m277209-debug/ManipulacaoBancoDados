@@ -1,0 +1,173 @@
+---
+title: "desafio 11"
+format: html
+editor: visual
+---
+
+```{r}
+file.exists('renda_adulta.csv.gz')
+```
+
+```{python}
+# Importando as bibliotecas necessárias
+import polars as pl
+import matplotlib.pyplot as plt
+
+# Definindo o nome das colunas conforme a imagem "Conjunto de Dados"
+column_names = [
+    'age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status',
+    'occupation', 'relationship', 'race', 'sex', 'capital-gain',
+    'capital-loss', 'hours-per-week', 'native-country', 'income'
+]
+
+# Tenta carregar o arquivo. Use o caminho correto se não estiver na mesma pasta.
+try:
+    # ============================================================================
+    # ATENÇÃO: ALTERE A LINHA ABAIXO COM O CAMINHO COMPLETO DO SEU ARQUIVO
+    caminho_do_arquivo = r'renda_adulta.csv.gz'
+    # ============================================================================
+
+    df = pl.read_csv(
+        caminho_do_arquivo,       # Usando a variável com o caminho
+        has_header=False,         # O arquivo não tem cabeçalho
+        new_columns=column_names, # Nomes das colunas a serem usados
+        null_values='?'           # Trata o caractere '?' como valor faltante (nulo)
+    )
+
+    # Limpeza: remove espaços em branco extras das colunas de texto
+    for col in df.select(pl.col(pl.Utf8)).columns:
+        df = df.with_columns(pl.col(col).str.strip_chars().alias(col))
+
+    print(f"Arquivo '{caminho_do_arquivo}' carregado com sucesso!")
+    print("Valores '?' foram interpretados como nulos.")
+    print("Primeiras 5 linhas do DataFrame:")
+    print(df.head())
+
+except FileNotFoundError:
+    print(f"Erro: O arquivo não foi encontrado no caminho especificado: '{caminho_do_arquivo}'")
+    print("Por favor, verifique se o caminho está correto e tente novamente.")
+    # exit() # Removido para permitir a execução em células separadas
+```
+
+```{python}
+# --- Resposta da Questão 2 ---
+print("--- 2. Tipos de Cada Coluna ---")
+print("Os tipos de dados de cada coluna são:")
+print(df.dtypes)
+```
+
+```{python}
+# --- Resposta da Questão 3 ---
+print("--- 3. Dimensões da Tabela de Dados ---")
+num_linhas, num_colunas = df.shape
+print(f"A tabela de dados possui {num_linhas} linhas e {num_colunas} colunas.")
+```
+
+```{python}
+# --- Resposta da Questão 4 ---
+print("--- 4. Contagem de Pessoas por Faixa de Renda ---")
+income_counts = df.get_column('income').value_counts()
+print(income_counts)
+```
+
+```{python}
+# --- Resposta da Questão 5 ---
+print("--- 5. Transformando colunas para o formato Longo ---")
+id_vars = [col for col in df.columns if col not in ['capital-gain', 'capital-loss']]
+
+renda_longo = df.melt(
+    id_vars=id_vars,
+    value_vars=['capital-gain', 'capital-loss'],
+    variable_name='tipo',   # Nova coluna com o nome da variável original
+    value_name='valor'      # Nova coluna com os valores
+)
+
+print("Objeto 'renda_longo' criado. Visualizando as primeiras 5 linhas:")
+print(renda_longo.head())
+print("\nDimensões do novo objeto 'renda_longo':", renda_longo.shape)
+```
+
+```{python}
+# --- Resposta da Questão 6 ---
+print("--- 6. Média de Horas Trabalhadas por Classe Salarial (workclass) ---")
+avg_hours_by_workclass = df.group_by('workclass').agg(
+    pl.mean('hours-per-week').alias('media_horas_trabalhadas')
+).sort('workclass')
+
+print(avg_hours_by_workclass)
+```
+
+```{python}
+# --- Resposta da Questão 7 (CORRIGIDO) ---
+print("--- 7. Quantidade de Pessoas Amostradas por Profissão ---")
+
+# CORREÇÃO: A coluna de contagem se chama 'count' (singular), não 'counts'
+people_per_occupation = df.get_column('occupation').value_counts().sort('count', descending=True)
+
+print(people_per_occupation)
+```
+
+```{python}
+# --- Resposta da Questão 8 (PYTHON) ---
+print("--- 8. Gráfico de Barras: Média de Horas por Nível Salarial ---")
+
+# 1. Calcular os dados
+avg_hours_by_income = df.group_by('income').agg(
+    pl.mean('hours-per-week').alias('media_horas')
+)
+print("Dados para o gráfico:")
+print(avg_hours_by_income)
+
+# 2. Extrair dados para o plot
+income_levels = avg_hours_by_income.get_column('income').to_list()
+average_hours = avg_hours_by_income.get_column('media_horas').to_list()
+
+# 3. Criar o gráfico com Matplotlib
+plt.figure(figsize=(8, 6))
+plt.bar(income_levels, average_hours, color=['#1f77b4', '#ff7f0e'])
+plt.title('Média de Horas de Trabalho Semanais por Nível Salarial', fontsize=14)
+plt.xlabel('Nível Salarial', fontsize=12)
+plt.ylabel('Média de Horas Trabalhadas', fontsize=12)
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.show()
+
+print("Gráfico exibido.")
+```
+
+```{python}
+# --- Resposta da Questão 9 (Desafio) ---
+print("--- 9. Desafio: Evidência de Discriminação Salarial por Gênero ---")
+print("Análise inicial da proporção de altos salários (>50K) por gênero.\n")
+
+# Agrupamos por 'sex' e calculamos a proporção de pessoas com renda '>50K'
+gender_income_proportion = df.group_by('sex').agg(
+    (pl.col('income') == '>50K').mean().alias('proporcao_acima_50K')
+).sort('sex')
+
+print("Proporção de cada gênero que ganha mais de $50.000 por ano:")
+print(gender_income_proportion)
+
+# Análise e interpretação
+male_prop = gender_income_proportion.filter(pl.col('sex') == 'Male').get_column('proporcao_acima_50K')[0]
+female_prop = gender_income_proportion.filter(pl.col('sex') == 'Female').get_column('proporcao_acima_50K')[0]
+
+print(f"\nAnálise: {male_prop:.2%} dos homens na amostra ganham mais de $50k, em comparação com {female_prop:.2%} das mulheres.")
+print("\nConclusão Preliminar:")
+print("Os dados brutos mostram uma disparidade significativa, com uma proporção consideravelmente maior de homens recebendo salários acima de $50.000.")
+print("ATENÇÃO: Isso é uma correlação, não necessariamente uma causalidade...")
+```
+
+```{python}
+# Importa a biblioteca necessária para trabalhar com data e hora
+import datetime
+
+# --- Registro de Data e Hora da Execução ---
+# Pega a data e hora atuais do sistema
+agora = datetime.datetime.now()
+
+# Formata a data e hora em um formato legível (Dia/Mês/Ano, Hora:Minuto:Segundo)
+timestamp_formatado = agora.strftime("%d/%m/%Y, Hora: %H:%M:%S")
+
+# Imprime o resultado na tela
+print(f"--- Código executado em: {timestamp_formatado} ---")
+```
