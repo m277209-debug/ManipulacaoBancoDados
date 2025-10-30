@@ -1,0 +1,108 @@
+
+---
+title: "Desafio 14"
+author: "Matheus Pierri de Oliveira"
+format: html
+---
+
+
+```{r}
+# Instalação do pacote reticulate (caso não esteja instalado)
+if (!require(reticulate)) install.packages("reticulate")
+library(reticulate)
+
+# Configuração do Python (ajuste o caminho se necessário)
+use_python("/usr/bin/python3", required = FALSE)
+
+#  Execute manualmente no console apenas uma vez (não será executado no Knit):
+# py_install(c("pandas", "plotnine"))
+```
+
+## 1) Importação do conjunto de dados
+
+```{python}
+import pandas as pd
+from plotnine import *
+
+# Lendo o arquivo compactado
+diamonds = pd.read_csv("diamonds.csv.gz")
+
+# Visualizando as primeiras linhas
+diamonds.head()
+```
+
+## 2) Associação entre peso (carat) e preço (price)
+
+```{python}
+p1 = (
+    ggplot(diamonds, aes(x='carat', y='price')) +
+    geom_point(alpha=0.3, color='steelblue') +
+    geom_smooth(method='lm', color='red') +
+    labs(
+        title='Relação entre Peso (Carat) e Preço (USD)',
+        x='Peso (carat)',
+        y='Preço (USD)'
+    ) +
+    theme_minimal()
+)
+p1.save("p1.png", width=8, height=6, dpi=120)
+from IPython.display import Image
+Image("p1.png")
+
+```
+
+ 
+Existe uma forte associação positiva entre o peso (carat) e o preço do diamante. À medida que o peso aumenta, o preço cresce de forma acentuada, sugerindo que diamantes maiores são significativamente mais caros, mas com variação crescente (maior dispersão para pesos altos).
+
+## 3) Relação entre carat e price considerando o tipo de corte (cut)
+
+```{python}
+p2 = (
+    ggplot(diamonds, aes(x='carat', y='price', color='cut')) +
+    geom_point(alpha=0.3) +
+    geom_smooth(method='lm', se=False) +
+    labs(
+        title='Relação entre Peso e Preço segundo o Tipo de Corte',
+        x='Peso (carat)',
+        y='Preço (USD)',
+        color='Corte'
+    ) +
+    theme_light()
+)
+p2.save("p2.png", width=8, height=6, dpi=120)
+from IPython.display import Image
+Image("p2.png")
+
+```
+
+
+A relação positiva entre peso e preço se mantém em todos os cortes, mas há diferenças entre eles. Diamantes com cortes de qualidade superior (como Ideal e Premium) tendem a ter preços maiores em comparação com cortes mais simples (Fair e Good) para o mesmo peso. Isso mostra que o tipo de corte influencia o valor agregado do diamante além do peso.
+
+## 4) Relação entre preço e peso considerando corte, cor e clareza
+
+```{python}
+p3 = (
+    ggplot(diamonds, aes(x='carat', y='price', color='cut')) +
+    geom_point(alpha=0.2) +
+    facet_grid('color ~ clarity') +
+    labs(
+        title='Preço vs Peso por Cor e Clareza (Color ~ Clarity)',
+        x='Peso (carat)',
+        y='Preço (USD)',
+        color='Corte'
+    ) +
+    theme_minimal() +
+    theme(
+        figure_size=(14, 10),
+        axis_text_x=element_text(rotation=45, hjust=1)
+    )
+)
+p3.save("p3.png", width=10, height=8, dpi=120)
+from IPython.display import Image
+Image("p3.png")
+
+
+```
+
+ 
+Criar uma visualização com múltiplas combinações (corte, cor e clareza) gera desafios de legibilidade e escala. Mesmo assim, nota-se que o padrão geral (preço aumentando com o peso) se mantém, mas o nível de preço varia de acordo com a cor e a clareza — diamantes mais claros e com melhor clareza são consistentemente mais caros.
