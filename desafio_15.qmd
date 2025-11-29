@@ -1,0 +1,43 @@
+---
+title: "Desafio 15"
+format: html
+---
+
+## Benchmark com Polyester
+
+Este documento demonstra o uso do pacote Polyester em Julia para paralelização de operações.
+
+```{julia}
+using Polyester
+
+function aplicar_serial!(saida, entrada)
+    for k in eachindex(entrada)
+        saida[k] = sin(entrada[k])
+    end
+end
+
+function aplicar_poly!(saida, entrada)
+    @batch for k in eachindex(entrada)
+        saida[k] = sin(entrada[k])
+    end
+end
+
+n = 20_000_000
+dados = rand(n)
+res_serial = similar(dados)
+res_poly = similar(dados)
+
+println("Iniciando benchmark com Polyester...")
+println("Quantidade de elementos: $n\n")
+
+println("Serial:")
+@time aplicar_serial!(res_serial, dados)
+@time aplicar_serial!(res_serial, dados)
+
+println("\nPolyester (@batch):")
+@time aplicar_poly!(res_poly, dados)
+@time aplicar_poly!(res_poly, dados)
+
+println("\nResultados iguais? ", res_serial == res_poly)
+println("Finalizado.")
+```
